@@ -1,0 +1,9 @@
+{
+	"G": 6.67e-11,
+	"earth_mass": 1.493e22,
+	"earth_radius": 318550,
+	"karman_line": 30000,
+	"moon_mass": 1.836e20,
+	"moon_radius": 86850,
+	"earth_moon_distance": 19220000
+}

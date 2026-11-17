@@ -1,0 +1,6 @@
+.history/
+.venv/
+.DS_Store
+__pycache__/ 
+.buildozer/
+bin/

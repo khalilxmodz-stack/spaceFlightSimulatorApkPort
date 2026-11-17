@@ -1,0 +1,62 @@
+name: Unzip project
+
+# Upload a .zip to the repository (web: Add file -> Upload files). This workflow
+# extracts it into the repo root, removes the zip, and commits the result.
+on:
+  push:
+    branches: [main, master]
+    paths: ["**.zip"]
+  workflow_dispatch:
+
+permissions:
+  contents: write
+
+jobs:
+  unzip:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          # GitHub forbids the default token from writing .github/workflows/*.
+          # Optional: add a secret PAT_TOKEN (classic token with "repo" + "workflow")
+          # to also extract workflow files and to trigger the APK build automatically.
+          token: ${{ secrets.PAT_TOKEN || github.token }}
+
+      - name: Extract zip files
+        id: extract
+        env:
+          HAS_PAT: ${{ secrets.PAT_TOKEN != '' }}
+        run: |
+          set -euo pipefail
+          mapfile -t zips < <(git ls-files '*.zip')
+          if [ ${#zips[@]} -eq 0 ]; then echo "No zip files found."; exit 0; fi
+
+          excludes=(--exclude=.git --exclude=__MACOSX --exclude=.DS_Store)
+          if [ "$HAS_PAT" != "true" ]; then excludes+=(--exclude=.github/workflows); fi
+
+          for z in "${zips[@]}"; do
+            echo "== $z"
+            tmp="$(mktemp -d)"
+            unzip -q -o "$z" -d "$tmp"
+            rm -rf "$tmp/__MACOSX"
+            # If the zip has a single top-level folder (like Skypiercer-main/), use its contents.
+            mapfile -t top < <(find "$tmp" -mindepth 1 -maxdepth 1)
+            src="$tmp"
+            if [ ${#top[@]} -eq 1 ] && [ -d "${top[0]}" ]; then src="${top[0]}"; fi
+            tar -C "$src" "${excludes[@]}" -cf - . | tar -xf -
+            git rm -f -q "$z"
+            rm -rf "$tmp"
+          done
+
+          if [ "$HAS_PAT" != "true" ]; then
+            echo "Note: .github/workflows/ was skipped (no PAT_TOKEN). Create workflow files on github.com."
+          fi
+
+      - name: Commit and push
+        run: |
+          git config user.name  "github-actions[bot]"
+          git config user.email "41898282+github-actions[bot]@users.noreply.github.com"
+          git add -A
+          if git diff --cached --quiet; then echo "Nothing to commit."; exit 0; fi
+          git commit -m "Extract uploaded zip"
+          git push
